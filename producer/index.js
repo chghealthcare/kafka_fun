@@ -16,13 +16,18 @@ try {
 
   producer.on('ready', async function() {
     console.log("Producer is ready")
-    let push_status = producer.send(payloads, (err, data) => {
-      if (err) {
-        console.log('[kafka-producer -> '+kafka_topic+']: broker update failed');
-      } else {
-        console.log('[kafka-producer -> '+kafka_topic+']: broker update success');
-      }
-    });
+    let counter = 0;
+    setInterval(() => {
+      counter += 1;
+      payloads[0].messages += " " + counter;
+      let push_status = producer.send(payloads, (err, data) => {
+        if (err) {
+          console.log('[kafka-producer -> '+kafka_topic+']: broker update failed');
+        } else {
+          console.log('[kafka-producer -> '+kafka_topic+']: broker update success');
+        }
+      });
+    }, 3000);
   });
 
   producer.on('error', function(err) {

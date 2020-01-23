@@ -31,6 +31,8 @@ services:
     container_name: consumer
     restart: always
     build: ./consumer
+    environment:
+      - KAFKA_HOST=kafka:9092    
     ports:
       - "4001:4001"
     depends_on:
