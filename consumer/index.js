@@ -1,4 +1,7 @@
 const config = require('./config');
+const Scheduler = require('./scheduler')
+const scheduler = new Scheduler();
+
 var kafka = require("kafka-node"),
   Consumer = kafka.Consumer,
   client = new kafka.KafkaClient({kafkaHost: config.kafka_server}),
@@ -6,9 +9,9 @@ var kafka = require("kafka-node"),
     autoCommit: true
   });
 
-consumer.on("message", function(message) {
-  console.log(message);
-  
-/** { topic: 'cat', value: 'I have 385 cats', offset: 412, partition: 0, highWaterOffset: 413, key: null } */
 
+
+consumer.on("message", function (message) {
+  scheduler.queueMessage(message)
+  // acknowledge that the message was handled to kafka
 });
