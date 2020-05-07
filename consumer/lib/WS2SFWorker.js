@@ -7,6 +7,11 @@ module.exports = class WS2SFWorker {
   constructor(){
     this.thread = new Worker('./lib/ws-sf-worker.js')
     this.toBeProcessed = []
+    this.completionHandlers
+  }
+
+  registerCompletionHandler(id, handler){
+    this.completionHandlers[id] = handler
   }
 
   async addToBeProcessed({ type, message }) {
@@ -19,6 +24,8 @@ module.exports = class WS2SFWorker {
       this.thread.postMessage({type, message})
       this.thread.on('message', res)
       this.thread.on('error', rej)
+    }).then(() => {
+
     })
   }
   async startWorking(){
