@@ -1,5 +1,5 @@
 const config = require('./config');
-const Scheduler = require('./scheduler')
+const Scheduler = require('./lib/Scheduler')
 const scheduler = new Scheduler();
 
 var kafka = require("kafka-node"),
@@ -9,9 +9,6 @@ var kafka = require("kafka-node"),
     autoCommit: true
   });
 
-
-
-consumer.on("message", function (message) {
-  scheduler.queueMessage(message)
-  // acknowledge that the message was handled to kafka
+consumer.on("message", (message) => {
+  scheduler.addWork(message)
 });
