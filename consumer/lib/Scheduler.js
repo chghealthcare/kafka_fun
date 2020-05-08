@@ -101,6 +101,7 @@ module.exports = class Scheduler {
    * Possible have 3 statuses for events in kafka
    * pending, processing, completed
    * 
+   * 
    */
   // transfers messages from waitingQueue into processingQueue
   buildProcessingQueue() {

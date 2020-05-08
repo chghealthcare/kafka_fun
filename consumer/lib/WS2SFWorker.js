@@ -20,6 +20,8 @@ module.exports = class WS2SFWorker {
       this.thread.postMessage({type, message})
       this.thread.on('message', res)
       this.thread.on('error', rej)
+    }).then(() => {
+
     })
   }
   async startWorking(){
