@@ -6,7 +6,8 @@ const {
 module.exports = class WS2SFWorker {
   constructor(){
     this.thread = new Worker('./lib/ws-sf-worker.js')
-    this.toBeProcessed = []
+    this.message = {}
+    this.working = false
   }
 
   async addToBeProcessed({ type, message }) {
@@ -27,6 +28,5 @@ module.exports = class WS2SFWorker {
       await this.processMessage({message, type})
       this.toBeProcessed.shift()
     }
-    
   }
 }
