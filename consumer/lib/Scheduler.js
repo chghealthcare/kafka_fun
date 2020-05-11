@@ -108,16 +108,16 @@ module.exports = class Scheduler {
     const aggregateIds = Object.keys(this.waitingQueue)
     // determines whether or not a message is releated another message already being worked on using the AggregateId
     for (const aggregateId of aggregateIds) {
-      const messages = this.waitingQueue[aggregateId]
       if(!this.processingAggregateIds.includes(aggregateId)){
-        
         //Add aggregateId to processingAggregateIds
         this.processingAggregateIds.push(aggregateId)
 
-        const message = messages.shift();
+        const message = this.waitingQueue[aggregateId].shift();
         
         //place available message into processingQueue
         this.processingQueue.push(message)
+
+        //Respond to Kafka letting it know the message is in the processing queue
       }
     }
   }
@@ -162,18 +162,30 @@ module.exports = class Scheduler {
         for (const aggregateId in this.processingQueue){
           if(!aggregateId.assigned) {
             // set to assigned
+            aggregateId.assigned = true
             // hand off to worker
+            worker.working = true
+            worker.message = aggregateId.message
+            worker.startWorking();
+            break
           }
         }
       }
     }
   }
 
-  handleCompletedMessage(message) {
-    // Remove message from processing queue
-    delete this.processingQueue[message.aggregateId]
-    // Remove AggregateId from processingAggregateIds
+  handleCompletedMessage(worker, message) {
     // respondToKafka()
+    // Remove message from processing queue
+    let index = processingQueue.indexOf(message.aggregateId);
+    if (index > -1) { // add an error to be thrown because this should exist
+      processingQueue.splice(index, 1);
+    }
+
+    // Remove AggregateId from processingAggregateIds
+    delete processingAggregateIds[message.aggregateId]
+
+    worker.working = false
   }
 
   addWorker(){
