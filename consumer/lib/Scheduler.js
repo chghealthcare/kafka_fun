@@ -68,7 +68,6 @@ module.exports = class Scheduler {
     const aggregateIds = Object.keys(this.waitingQueue)
     // determines whether or not a message is releated another message already being worked on using the AggregateId
     for (const aggregateId of aggregateIds) {
-<<<<<<< HEAD
       if(!this.processingAggregateIds[aggregateId]){
         // Add aggregateId to processingAggregateIds
         this.processingAggregateIds[aggregateId] = this.waitingQueue[aggregateId]
@@ -84,18 +83,6 @@ module.exports = class Scheduler {
         
         // TODO
         // Respond to Kafka letting it know the message is in the processing queue
-=======
-      if(!this.processingAggregateIds.includes(aggregateId)){
-        //Add aggregateId to processingAggregateIds
-        this.processingAggregateIds.push(aggregateId)
-
-        const message = this.waitingQueue[aggregateId].shift();
-        
-        //place available message into processingQueue
-        this.processingQueue.push(message)
-
-        //Respond to Kafka letting it know the message is in the processing queue
->>>>>>> 052a5a83f087ca2084bac0e60504742a5c4e021c
       }
     }
     this.distributeMessagesToWorkers()
@@ -103,7 +90,6 @@ module.exports = class Scheduler {
 
   // Pull messages from processingQueue and hand off to workers
   distributeMessagesToWorkers() {
-<<<<<<< HEAD
     // check that workers exist
     if(this.workers) {
       // hand off to first available worker
@@ -120,20 +106,6 @@ module.exports = class Scheduler {
               this.workerProcessEvent(worker);
               break
             }
-=======
-    // Pull from processing queue and hand off to first available worker
-    for (const worker in this.workers){
-      if(!worker.working){
-        for (const aggregateId in this.processingQueue){
-          if(!aggregateId.assigned) {
-            // set to assigned
-            aggregateId.assigned = true
-            // hand off to worker
-            worker.working = true
-            worker.message = aggregateId.message
-            worker.startWorking();
-            break
->>>>>>> 052a5a83f087ca2084bac0e60504742a5c4e021c
           }
         }
       })
@@ -142,23 +114,6 @@ module.exports = class Scheduler {
       this.addWorker()
       this.distributeMessagesToWorkers()
     }
-<<<<<<< HEAD
-=======
-  }
-
-  handleCompletedMessage(worker, message) {
-    // respondToKafka()
-    // Remove message from processing queue
-    let index = processingQueue.indexOf(message.aggregateId);
-    if (index > -1) { // add an error to be thrown because this should exist
-      processingQueue.splice(index, 1);
-    }
-
-    // Remove AggregateId from processingAggregateIds
-    delete processingAggregateIds[message.aggregateId]
-
-    worker.working = false
->>>>>>> 052a5a83f087ca2084bac0e60504742a5c4e021c
   }
 
   addWorker(){
