@@ -1,191 +1,153 @@
+const EventEmitter = require('events')
 const WS2SFWorker = require('./WS2SFWorker')
-
-
-/**
- * 
- * kafkaQueue [ - links kafka queue
- * ]
- * 
- * waitingQueue { - Organization of messages based on aggregate Id
- *  aggregateId1: [ - 
- *    messageId2
- *  ],
- *  aggregateId2: [
- *    messageId1,
- *    messageId2
- *  ],
- * }
- * 
- * processingAggregateId's: { - list of aggregate Ids currently being worked on
- *   aggregateId1: true,
- *   aggregateId2: true
- * }
- * 
- * processingQueue { - list of messages ready to be processed
- *  aggregateId: {
- *   message1: {},
- *   assigned: true
- *  },
- *  message2,
- *  message3,
- * }
- * 
- * 
- */
 
 module.exports = class Scheduler {
   constructor(){
-    this.runScheduler = true
-    this.kafkaQueue = []
     this.waitingQueue = {}
     this.processingQueue = []
     this.processingAggregateIds = {}
     this.workers = []
     this.WORKER_MAX = 9
+    this.bus = new EventEmitter()
   }
 
-  // Get queue from Kafka
-  pullFromKafkaQueue() {
-    // get Events from Kafka and tell Kafka we are working on it
+  // Handler for new Kafka Event 
+  handleNewKafkaEvent(message) {
+    this.addToWaitingQueue(message);
+    this.buildProcessingQueue();
   }
+
+  // waitingQueue { - Organization of messages based on aggregate Id
+  //    aggregateId1: [ - 
+  //      messageId2
+  //    ],
+  //    aggregateId2: [
+  //      messageId1,
+  //      messageId2
+  //    ],
+  // }
+  addToWaitingQueue(message) {
+    if(this.waitingQueue[message.aggregateId]){
+      this.waitingQueue[message.aggregateId].push(message)
+    }else {
+      this.waitingQueue[message.aggregateId] = [
+        message
+      ]
+    }
+}
 
   // send response to kafka
   respondToKafka() {
+    // TODO
     // Tell Kafka that the event has been handled
-  }
-
-  async startScheduler(){
-    await this.initializeWorkerPool()
-    /**
-     * 
-     * 
-     * need to run both of these continuously at the same time
-     * 
-     * 
-     */
-    this.distributeMessagesToQueue()
-    this.distributeMessagesToWorkers()
-  }
-
-  distributeMessagesToQueue() {
-    this.pullFromKafkaQueue();
-    this.buildWaitingQueue();
-    this.buildProcessingQueue();
   }
 
   initializeWorkerPool() {
     for( let i = 0; i < this.WORKER_MAX; i++){
       this.addWorker();
     }
-    
   }
 
-  // transfers messages from kafkaQueue into waitingQueue
-  // waitingQueue is composed of a list of aggregateIDs and related messages
-  buildWaitingQueue() {
-    this.kafkaQueue.forEach(msg => {
-      if(waitingQueue[msg.aggregateId]){
-        waitingQueue[msg.aggregateId].push(msg)
-      }else {
-        waitingQueue[msg.aggregateId] = [
-          msg
-        ]
-      }
-    })
-  }
-
-  /**
-   * 
-   * Set up kafka response to let kafka know that a message is now being processed
-   * 
-   * Possible have 3 statuses for events in kafka
-   * pending, processing, completed
-   * 
-   * 
-   */
-  // transfers messages from waitingQueue into processingQueue
+  // processingQueue is a list of messages ready to be processed sorted by aggregateId, looks like this
+  //   processingQueue = [
+  //     { message: msg, assigned: true },
+  //     { message: msg, assigned: true },
+  //     { message: msg, assigned: false },
+  //     { message: msg, assigned: false },
+  //     { message: msg, assigned: false },
+  //   ]
+  //
+  // processingAggregateIds is a list of aggregate Ids currently being worked on, looks like this
+  //   processingAggregateIds = {
+  //     aggregateId1: true,
+  //     aggregateId2: true
+  //   }
+  // 
+  // This method transfers messages from the waitingQueue into the processingQueue & builds/updates the processingAggregateIds list
   buildProcessingQueue() {
     const aggregateIds = Object.keys(this.waitingQueue)
     // determines whether or not a message is releated another message already being worked on using the AggregateId
     for (const aggregateId of aggregateIds) {
-      const messages = this.waitingQueue[aggregateId]
-      if(!this.processingAggregateIds.includes(aggregateId)){
+      if(!this.processingAggregateIds[aggregateId]){
+        // Add aggregateId to processingAggregateIds
+        this.processingAggregateIds[aggregateId] = this.waitingQueue[aggregateId]
+  
+        const message = this.waitingQueue[aggregateId].shift();
+        // clean up waitingQueue artifacts if there are no other messages for this aggregateId
+        if (this.waitingQueue[aggregateId].length === 0) {
+            delete this.waitingQueue[aggregateId]
+        }
         
-        //Add aggregateId to processingAggregateIds
-        this.processingAggregateIds.push(aggregateId)
-
-        const message = messages.shift();
+        // place available message into processingQueue
+        this.processingQueue.push({ message, assigned: false})
         
-        //place available message into processingQueue
-        this.processingQueue.push(message)
+        // TODO
+        // Respond to Kafka letting it know the message is in the processing queue
       }
     }
+    this.distributeMessagesToWorkers()
   }
 
-
-
-  /**
-   * How do we best handle which message is already being processed
-   * 
-   * 
-   * What happens if a worker working on a message crashes
-   * 
-   * 
-   * When should we remove a message from the processing queue
-   * 
-   * 
-   * 
-   * //processingQueue
-   *  {
-   *    AggregateId: {
-   *     Message
-   *     status: 'completed'
-   *    }
-   *  }
-   * 
-   * //processingQueue
-   *  [
-   *    Message
-   *  ]
-   *  
-   *  
-   * 
-   * 
-   * 
-   */
-
-  // Pull messages from processQueue and hand off to workers
+  // Pull messages from processingQueue and hand off to workers
   distributeMessagesToWorkers() {
-    // Pull from processing queue and hand off to first available worker
-    for (const worker in this.workers){
-      if(!worker.working){
-        for (const aggregateId in this.processingQueue){
-          if(!aggregateId.assigned) {
-            // set to assigned
-            // hand off to worker
+    // check that workers exist
+    if(this.workers) {
+      // hand off to first available worker
+      this.workers.forEach (worker => {
+        if(!worker.working){
+          for (i = 0; i < this.processingQueue.length; i++){
+            let event = this.processingQueue[i]
+            if(!event.assigned) {
+              // set to assigned
+              event.assigned = true
+              // hand off to worker
+              worker.working = true
+              worker.event = event
+              this.workerProcessEvent(worker);
+              break
+            }
           }
         }
-      }
+      })
     }
-  }
-
-  handleCompletedMessage(message) {
-    // Remove message from processing queue
-    delete this.processingQueue[message.aggregateId]
-    // Remove AggregateId from processingAggregateIds
-    // respondToKafka()
+    else {
+      this.addWorker()
+      this.distributeMessagesToWorkers()
+    }
   }
 
   addWorker(){
+    // TODO in worker definition
+    // these instances need to be constructed with a 'event' property that is null, working property that is false, and a assigned property that is false
     this.workers.push(new WS2SFWorker())
   }
 
-  getMessageType(message){
-    return 'create'
+  workerProcessEvent(worker) {
+    // TODO
+    // worker.startWorking()
+    // timeout to simulate a call to salesforce which takes a long time
+    setTimeout( () => {
+        this.bus.emit('finished processing', worker)
+    }, 500)
   }
 
-  addWork(message){
-    const type = this.getMessageType(message)
-    this.workers[0].addToBeProcessed({type, message})
+  handleCompletedMessage(worker) {
+    // TODO 
+    // respondToKafka()
+  
+    // Remove message from processing queue
+    let index = this.processingQueue.indexOf(worker.event);
+    if (index > -1) { // add an error to be thrown because this should exist
+      this.processingQueue.splice(index, 1);
+    }
+  
+    // Remove AggregateId from processingAggregateIds
+    delete this.processingAggregateIds[worker.event.message.aggregateId]
+  
+    // reset the worker metadata
+    worker.working = false
+    worker.event = {}
+    this.buildProcessingQueue()
+    this.distributeMessagesToWorkers();
   }
 }
